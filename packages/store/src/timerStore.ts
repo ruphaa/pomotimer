@@ -144,21 +144,36 @@ export function createTimerStore(initial?: Partial<TimerState>) {
   const setEditingTimer = (editing: boolean) =>
     store.setState((s) => ({ ...s, editingTimer: editing }));
 
-  /** Replace state from a persisted snapshot. Used on hydrate + external sync. */
+  /** Replace state from a persisted snapshot. Used on hydrate + external sync.
+   * Defensive: any missing/undefined field falls back to the current default
+   * so a partial / older-schema blob in storage can't produce NaN downstream
+   * (e.g. formatMmSs(undefined) → "NaN:NaN"). */
   const replaceFromPersisted = (
-    persisted: Pick<
-      AppPersistedState,
-      "mode" | "durations" | "round" | "endsAt" | "pausedSecondsLeft"
+    persisted: Partial<
+      Pick<
+        AppPersistedState,
+        "mode" | "durations" | "round" | "endsAt" | "pausedSecondsLeft"
+      >
     >,
   ) => {
-    store.setState((s) => ({
-      ...s,
-      mode: persisted.mode,
-      durations: persisted.durations,
-      round: persisted.round,
-      endsAt: persisted.endsAt,
-      pausedSecondsLeft: persisted.pausedSecondsLeft,
-    }));
+    store.setState((s) => {
+      const mode = persisted.mode ?? s.mode;
+      const durations = { ...s.durations, ...(persisted.durations ?? {}) };
+      const pausedSecondsLeft =
+        typeof persisted.pausedSecondsLeft === "number" &&
+        Number.isFinite(persisted.pausedSecondsLeft)
+          ? persisted.pausedSecondsLeft
+          : durations[mode];
+      return {
+        ...s,
+        mode,
+        durations,
+        round: persisted.round ?? s.round,
+        endsAt:
+          typeof persisted.endsAt === "number" ? persisted.endsAt : null,
+        pausedSecondsLeft,
+      };
+    });
   };
 
   return {

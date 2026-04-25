@@ -9,20 +9,40 @@ import { isRunning } from "./timerStore";
  * Returns live seconds-left, derived from `endsAt + Date.now()`. Re-renders
  * every 250ms while the timer is running so the displayed value stays
  * fresh; idle while paused.
+ *
+ * Two flicker traps to avoid here, both fixed below:
+ *
+ * 1. Stale `now`: if we kept `Date.now()` in `useState` and only refreshed
+ *    it inside an effect, the first render after `endsAt` flipped on would
+ *    use a `now` from popup-mount time, briefly displaying e.g. 25:04
+ *    before the effect ran and snapped it back to 25:00. Fix: read
+ *    `Date.now()` directly in render via `computeSecondsLeft`'s default.
+ *
+ * 2. Torn store reads: `endsAt` and `pausedSecondsLeft` are mutated in a
+ *    single `setState` (e.g. pause() sets endsAt=null AND writes the
+ *    captured remaining seconds). But subscribing to them via two
+ *    separate `useTimerState(...)` calls produces two independent
+ *    @tanstack/react-store subscriptions, which may commit in distinct
+ *    React renders. That yields an intermediate paint where endsAt is
+ *    already null but pausedSecondsLeft still holds the previous (often
+ *    full-duration) value — numerals jump to e.g. 25:00 for one frame
+ *    before settling at 24:57. Fix: read both in ONE selector so the
+ *    consumer always sees an atomic snapshot.
  */
 export function useSecondsLeft(): number {
-  const endsAt = useTimerState((s) => s.endsAt);
-  const pausedSecondsLeft = useTimerState((s) => s.pausedSecondsLeft);
-  const [now, setNow] = useState(() => Date.now());
+  const { endsAt, pausedSecondsLeft } = useTimerState((s) => ({
+    endsAt: s.endsAt,
+    pausedSecondsLeft: s.pausedSecondsLeft,
+  }));
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (endsAt == null) return;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 250);
+    const id = setInterval(() => setTick((t) => t + 1), 250);
     return () => clearInterval(id);
   }, [endsAt]);
 
-  return computeSecondsLeft(endsAt, pausedSecondsLeft, now);
+  return computeSecondsLeft(endsAt, pausedSecondsLeft);
 }
 
 /** Convenience: `true` when there's an active deadline. */
