@@ -1,16 +1,27 @@
 import { chromeStorageAdapter } from "@pomotimer/core/storage/chrome";
 import { localStorageAdapter } from "@pomotimer/core/storage/local";
-import { formatMmSs, type Mode } from "@pomotimer/core";
+import { type Mode } from "@pomotimer/core";
 import {
   StoresProvider,
   useStores,
   useTimerEngine,
   useTimerState,
 } from "@pomotimer/store";
+import {
+  Info,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings,
+  SkipForward,
+  Download,
+} from "lucide-react";
 import { useEffect } from "react";
 
-// Use chrome.storage when available, fall back to localStorage when running
-// the popup outside the extension runtime (e.g. `vite dev`).
+import { PopupTaskList } from "./PopupTaskList";
+import { PopupTimerNumerals } from "./PopupTimerNumerals";
+import { ProgressRing } from "./ProgressRing";
+
 const storage =
   typeof chrome !== "undefined" && chrome.storage
     ? chromeStorageAdapter
@@ -28,15 +39,6 @@ function PopupShell() {
   useTimerEngine({ syncDocumentTitle: false });
   useModeAttribute();
 
-  const secondsLeft = useTimerState((s) => s.secondsLeft);
-  const running = useTimerState((s) => s.running);
-  const mode = useTimerState((s) => s.mode);
-  const round = useTimerState((s) => s.round);
-  const { timer } = useStores();
-
-  const [mm, ss] = formatMmSs(secondsLeft).split(":");
-  const colonDim = running && secondsLeft % 2 === 1;
-
   return (
     <div
       style={{
@@ -50,90 +52,77 @@ function PopupShell() {
         flexDirection: "column",
       }}
     >
+      <PopupHeader />
       <ModeTabs />
-      <div
-        style={{
-          flex: 1,
-          display: "grid",
-          placeItems: "center",
-          padding: "0 18px",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontWeight: 500,
-              fontSize: 56,
-              lineHeight: 1,
-              letterSpacing: "-0.04em",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {mm}
-            <span
-              style={{
-                opacity: colonDim ? 0.25 : 1,
-                transition: "opacity 0.4s ease",
-              }}
-            >
-              :
-            </span>
-            {ss}
-          </div>
-          <div
-            style={{
-              marginTop: 12,
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              color: "var(--text-tertiary)",
-            }}
-          >
-            Round {round} · {modeLabel(mode)}
-          </div>
-          <div
-            style={{
-              marginTop: 18,
-              display: "flex",
-              gap: 10,
-              justifyContent: "center",
-            }}
-          >
-            <button
-              onClick={timer.reset}
-              style={miniRoundButton()}
-              aria-label="Reset"
-            >
-              ↺
-            </button>
-            <button
-              onClick={timer.toggle}
-              style={{
-                padding: "11px 32px",
-                borderRadius: "var(--radius-pill)",
-                background: "var(--accent)",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-                boxShadow: "var(--shadow-button-primary)",
-                transition: "var(--transition-accent)",
-              }}
-            >
-              {running ? "Pause" : "Start"}
-            </button>
-            <button
-              onClick={timer.skip}
-              style={miniRoundButton()}
-              aria-label="Skip"
-            >
-              ⇥
-            </button>
-          </div>
-        </div>
-      </div>
+      <TimerSection />
+      <Controls />
+      <PopupTaskList />
     </div>
+  );
+}
+
+function PopupHeader() {
+  return (
+    <header
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "14px 18px",
+        borderBottom: "1px solid var(--border-hairline)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span
+          aria-hidden
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "var(--radius-sm)",
+            background: "var(--accent)",
+            color: "#fff",
+            display: "inline-grid",
+            placeItems: "center",
+            fontSize: 12,
+            fontWeight: 700,
+            transition: "var(--transition-accent)",
+          }}
+        >
+          P
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>Pomotimer</span>
+      </div>
+      <div style={{ display: "flex", gap: 4 }}>
+        <SmallIconButton aria-label="About">
+          <Info size={14} strokeWidth={1.75} />
+        </SmallIconButton>
+        <SmallIconButton aria-label="Sync">
+          <Download size={14} strokeWidth={1.75} />
+        </SmallIconButton>
+        <SmallIconButton aria-label="Settings">
+          <Settings size={14} strokeWidth={1.75} />
+        </SmallIconButton>
+      </div>
+    </header>
+  );
+}
+
+function SmallIconButton(
+  props: React.ButtonHTMLAttributes<HTMLButtonElement>,
+) {
+  return (
+    <button
+      {...props}
+      style={{
+        width: 26,
+        height: 26,
+        borderRadius: "var(--radius-sm)",
+        color: "var(--text-secondary)",
+        display: "inline-grid",
+        placeItems: "center",
+        transition: "background-color 0.15s ease",
+      }}
+    />
   );
 }
 
@@ -172,25 +161,104 @@ function ModeTabs() {
   );
 }
 
-function miniRoundButton(): React.CSSProperties {
-  return {
-    width: 36,
-    height: 36,
-    borderRadius: "50%",
-    background: "var(--bg-subtle)",
-    color: "var(--text-secondary)",
-    display: "inline-grid",
-    placeItems: "center",
-    fontSize: 14,
-  };
+function TimerSection() {
+  const round = useTimerState((s) => s.round);
+  const mode = useTimerState((s) => s.mode);
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "grid",
+        placeItems: "center",
+        padding: "14px 18px 0",
+      }}
+    >
+      <ProgressRing>
+        <div>
+          <PopupTimerNumerals />
+          <div
+            style={{
+              marginTop: 6,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              fontWeight: 500,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: "var(--text-tertiary)",
+            }}
+          >
+            Round {round} · {mode === "pomodoro" ? "Focus" : "Break"}
+          </div>
+        </div>
+      </ProgressRing>
+    </div>
+  );
 }
 
-function modeLabel(mode: Mode) {
-  return mode === "pomodoro"
-    ? "Focus"
-    : mode === "short"
-      ? "Short break"
-      : "Long break";
+function Controls() {
+  const running = useTimerState((s) => s.running);
+  const { timer } = useStores();
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "18px 18px 16px",
+      }}
+    >
+      <RoundButton onClick={timer.reset} aria-label="Reset">
+        <RotateCcw size={14} strokeWidth={1.75} />
+      </RoundButton>
+      <button
+        onClick={timer.toggle}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "11px 32px",
+          borderRadius: "var(--radius-pill)",
+          background: "var(--accent)",
+          color: "#fff",
+          fontSize: 14,
+          fontWeight: 600,
+          boxShadow: "var(--shadow-button-primary)",
+          transition: "var(--transition-accent)",
+        }}
+      >
+        {running ? (
+          <Pause size={13} fill="currentColor" strokeWidth={0} />
+        ) : (
+          <Play size={13} fill="currentColor" strokeWidth={0} />
+        )}
+        {running ? "Pause" : "Start"}
+      </button>
+      <RoundButton onClick={timer.skip} aria-label="Skip">
+        <SkipForward size={14} strokeWidth={1.75} />
+      </RoundButton>
+    </div>
+  );
+}
+
+function RoundButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: "50%",
+        background: "var(--bg-subtle)",
+        color: "var(--text-secondary)",
+        display: "inline-grid",
+        placeItems: "center",
+        transition: "background-color 0.15s ease",
+      }}
+    />
+  );
 }
 
 function useModeAttribute() {
