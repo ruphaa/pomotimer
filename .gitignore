@@ -15,3 +15,6 @@ dist-ssr
 coverage
 .turbo
 .pnpm-store
+
+# TanStack Router generated route tree (regenerated on build/dev)
+**/routeTree.gen.ts

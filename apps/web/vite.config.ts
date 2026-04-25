@@ -1,16 +1,19 @@
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start-plugin";
+import viteReact from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   plugins: [
     tanstackStart({
+      customViteReactPlugin: true,
       tsr: {
         srcDirectory: "src",
         routesDirectory: "src/routes",
         generatedRouteTree: "src/routeTree.gen.ts",
       },
     }),
+    viteReact(),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
