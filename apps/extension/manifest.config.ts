@@ -9,6 +9,10 @@ export default defineManifest({
     default_popup: "src/popup/index.html",
     default_title: "Pomotimer",
   },
-  permissions: ["storage"],
+  background: {
+    service_worker: "src/background.ts",
+    type: "module",
+  },
+  permissions: ["storage", "alarms", "notifications"],
   // TODO: add icons/icon-{16,32,48,128}.png to public/ before publishing.
 });

@@ -3,6 +3,7 @@ import { localStorageAdapter } from "@pomotimer/core/storage/local";
 import { type Mode } from "@pomotimer/core";
 import {
   StoresProvider,
+  useIsRunning,
   useStores,
   useTimerEngine,
   useTimerState,
@@ -36,7 +37,9 @@ export function Popup() {
 }
 
 function PopupShell() {
-  useTimerEngine({ syncDocumentTitle: false });
+  // Background service worker handles completion authoritatively. The
+  // popup just renders + drives UI updates.
+  useTimerEngine({ syncDocumentTitle: false, handleCompletion: false });
   useModeAttribute();
 
   return (
@@ -197,7 +200,7 @@ function TimerSection() {
 }
 
 function Controls() {
-  const running = useTimerState((s) => s.running);
+  const running = useIsRunning();
   const { timer } = useStores();
 
   return (

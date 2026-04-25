@@ -1,8 +1,8 @@
-import { activeMinutes, useTimerState } from "@pomotimer/store";
+import { activeMinutes, useSecondsLeft, useTimerState } from "@pomotimer/store";
 
 /** 480 × 2px track with accent fill that animates 1s linear. */
 export function ProgressBar() {
-  const secondsLeft = useTimerState((s) => s.secondsLeft);
+  const secondsLeft = useSecondsLeft();
   const totalSeconds = useTimerState((s) => activeMinutes(s) * 60);
   const elapsed = Math.max(0, totalSeconds - secondsLeft);
   const pct =

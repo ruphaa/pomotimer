@@ -1,8 +1,13 @@
-import { activeTask, useTasksState, useTimerState } from "@pomotimer/store";
+import {
+  activeTask,
+  useSecondsLeft,
+  useTasksState,
+  useTimerState,
+} from "@pomotimer/store";
 
 export function NowFocusingCallout() {
   const task = useTasksState(activeTask);
-  const secondsLeft = useTimerState((s) => s.secondsLeft);
+  const secondsLeft = useSecondsLeft();
   const mode = useTimerState((s) => s.mode);
 
   if (!task || mode !== "pomodoro") return null;

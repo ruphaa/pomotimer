@@ -1,89 +1,117 @@
-import { formatMmSs } from "@pomotimer/core";
-import { useEffect } from "react";
+import { computeSecondsLeft, formatMmSs } from "@pomotimer/core";
+import { useEffect, useState } from "react";
 
-import { useStores } from "./StoresContext";
+import { useStores, useTimerState } from "./StoresContext";
 import { activeTask } from "./tasksStore";
+import { isRunning } from "./timerStore";
+
+/**
+ * Returns live seconds-left, derived from `endsAt + Date.now()`. Re-renders
+ * every 250ms while the timer is running so the displayed value stays
+ * fresh; idle while paused.
+ */
+export function useSecondsLeft(): number {
+  const endsAt = useTimerState((s) => s.endsAt);
+  const pausedSecondsLeft = useTimerState((s) => s.pausedSecondsLeft);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (endsAt == null) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [endsAt]);
+
+  return computeSecondsLeft(endsAt, pausedSecondsLeft, now);
+}
+
+/** Convenience: `true` when there's an active deadline. */
+export function useIsRunning(): boolean {
+  return useTimerState(isRunning);
+}
 
 export interface TimerEngineOptions {
-  /** Mirror remaining time into `document.title`. Defaults to `true`. */
+  /** Mirror remaining time into `document.title`. Default `true`. */
   syncDocumentTitle?: boolean;
   /** Title suffix when running. */
   titleSuffix?: string;
-  /** Called when a session completes (after stats logged + advance). */
+  /**
+   * If `true` (default), this surface owns completion: when the deadline
+   * passes, log a session, bump the active task's pomos, and advance the
+   * mode. Set `false` for the extension popup (the BG service worker
+   * handles completion authoritatively).
+   */
+  handleCompletion?: boolean;
+  /** Optional callback fired after completion has been applied. */
   onComplete?: (mode: "pomodoro" | "short" | "long") => void;
 }
 
 /**
- * Drives the timer:
- *  - 1Hz tick while `running` is true.
- *  - On completion: log a session (focus only), bump the active task's pomos,
- *    advance the mode, fire `onComplete`.
- *  - Mirrors `mm:ss — Pomotimer` into `document.title`.
- *
- * Mount once, near the root, inside <StoresProvider>.
+ * Drive completion + document.title for an open surface. Mount once, near
+ * the root, inside <StoresProvider>.
  */
 export function useTimerEngine(options: TimerEngineOptions = {}) {
   const {
     syncDocumentTitle = true,
     titleSuffix = "Pomotimer",
+    handleCompletion = true,
     onComplete,
   } = options;
   const { timer, tasks, stats } = useStores();
 
-  // Tick.
+  // Completion: schedule a single setTimeout for endsAt (web). Re-set
+  // whenever endsAt changes. Skipped when handleCompletion is false.
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
+    if (!handleCompletion) return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const unsubscribe = timer.store.subscribe(() => {
-      const running = timer.store.state.running;
-      if (running && interval == null) {
-        interval = setInterval(() => {
-          const completed = timer.tick();
-          if (!completed) return;
-
-          const state = timer.store.state;
-          // We just transitioned secondsLeft -> 0 in `state` for the
-          // current mode; capture mode + duration before advancing.
-          const completedMode = state.mode;
-          if (completedMode === "pomodoro") {
-            const sessionSeconds = state.durations.pomodoro;
+    const schedule = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      const { endsAt } = timer.store.state;
+      if (endsAt == null) return;
+      const delay = Math.max(0, endsAt - Date.now());
+      timeoutId = setTimeout(() => {
+        const completedMode = timer.store.state.mode;
+        timer.advanceAfterCompletion({
+          onFocusComplete: (sessionSeconds) => {
             const active = activeTask(tasks.store.state);
             stats.logSession(sessionSeconds, active?.id);
             if (active) tasks.incrementPomos(active.id);
-          }
-          timer.advanceAfterCompletion();
-          onComplete?.(completedMode);
-        }, 1000);
-      } else if (!running && interval != null) {
-        clearInterval(interval);
-        interval = null;
-      }
-    });
+          },
+        });
+        onComplete?.(completedMode);
+      }, delay);
+    };
 
-    // Kick once in case we mount with running already true.
-    if (timer.store.state.running && interval == null) {
-      interval = setInterval(() => {
-        timer.tick();
-      }, 1000);
-    }
-
+    schedule();
+    const unsubscribe = timer.store.subscribe(schedule);
     return () => {
       unsubscribe();
-      if (interval != null) clearInterval(interval);
+      if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [timer, tasks, stats, onComplete]);
+  }, [timer, tasks, stats, handleCompletion, onComplete]);
 
   // <title> sync.
   useEffect(() => {
     if (!syncDocumentTitle || typeof document === "undefined") return;
     const original = document.title;
-    const unsubscribe = timer.store.subscribe(() => {
-      const { secondsLeft } = timer.store.state;
-      document.title = `${formatMmSs(secondsLeft)} — ${titleSuffix}`;
-    });
-    // Initial paint
-    document.title = `${formatMmSs(timer.store.state.secondsLeft)} — ${titleSuffix}`;
+    const paint = () => {
+      const { endsAt, pausedSecondsLeft } = timer.store.state;
+      document.title = `${formatMmSs(
+        computeSecondsLeft(endsAt, pausedSecondsLeft),
+      )} — ${titleSuffix}`;
+    };
+    paint();
+    // Repaint roughly every second while running.
+    const id = setInterval(() => {
+      if (timer.store.state.endsAt != null) paint();
+    }, 500);
+    const unsubscribe = timer.store.subscribe(paint);
     return () => {
+      clearInterval(id);
       unsubscribe();
       document.title = original;
     };

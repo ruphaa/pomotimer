@@ -19,8 +19,13 @@ export interface PomotimerStores {
 
 /**
  * Bundle the three stores + wire persistence to a single key in `storage`.
- * Persisted shape is intentionally narrow — UI flags (running, editingTimer,
- * newTaskDraft) are NOT persisted.
+ *
+ * - Hydrates from the persisted blob on construction.
+ * - Subscribes to in-memory store changes and writes back the full blob.
+ * - If the storage adapter supports `subscribe`, also mirrors EXTERNAL
+ *   writes (e.g. background service worker, other tab) back into the
+ *   in-memory stores. Self-originating writes are de-duplicated by a
+ *   serialized-snapshot comparison so we don't loop.
  */
 export function createPomotimerStores(
   storage: StorageAdapter,
@@ -29,42 +34,66 @@ export function createPomotimerStores(
   const tasks = createTasksStore();
   const stats = createStatsStore();
 
+  let lastSerialized: string | null = null;
+
+  const snapshot = (): AppPersistedState => ({
+    mode: timer.store.state.mode,
+    durations: timer.store.state.durations,
+    round: timer.store.state.round,
+    endsAt: timer.store.state.endsAt,
+    pausedSecondsLeft: timer.store.state.pausedSecondsLeft,
+    tasks: tasks.store.state.tasks,
+    sessions: stats.store.state.sessions,
+  });
+
+  const applyPersisted = (persisted: AppPersistedState) => {
+    timer.replaceFromPersisted(persisted);
+    tasks.store.setState((s) => ({ ...s, tasks: persisted.tasks ?? [] }));
+    stats.store.setState((s) => ({
+      ...s,
+      sessions: persisted.sessions ?? [],
+    }));
+  };
+
   const hydrated = (async () => {
     const persisted = await storage.get<AppPersistedState>(STORAGE_KEY);
-    if (!persisted) return;
-    if (persisted.durations) {
-      timer.store.setState((s) => ({
-        ...s,
-        durations: persisted.durations,
-        secondsLeft: persisted.durations[s.mode],
-      }));
+    if (!persisted) {
+      lastSerialized = JSON.stringify(snapshot());
+      return;
     }
-    if (typeof persisted.round === "number") {
-      timer.store.setState((s) => ({ ...s, round: persisted.round }));
-    }
-    if (Array.isArray(persisted.tasks)) {
-      tasks.store.setState((s) => ({ ...s, tasks: persisted.tasks }));
-    }
-    if (Array.isArray(persisted.sessions)) {
-      stats.store.setState((s) => ({ ...s, sessions: persisted.sessions }));
-    }
+    applyPersisted(persisted);
+    lastSerialized = JSON.stringify(persisted);
   })();
 
   const writeBack = () => {
-    const snapshot: AppPersistedState = {
-      durations: timer.store.state.durations,
-      round: timer.store.state.round,
-      tasks: tasks.store.state.tasks,
-      sessions: stats.store.state.sessions,
-    };
-    void storage.set(STORAGE_KEY, snapshot);
+    const next = snapshot();
+    const serialized = JSON.stringify(next);
+    if (serialized === lastSerialized) return;
+    lastSerialized = serialized;
+    void storage.set(STORAGE_KEY, next);
   };
 
-  const unsubs = [
+  const unsubs: Array<() => void> = [
     timer.store.subscribe(writeBack),
     tasks.store.subscribe(writeBack),
     stats.store.subscribe(writeBack),
   ];
+
+  // Mirror external changes in (e.g. BG service worker writes after the
+  // alarm fires while the popup happens to be open).
+  if (storage.subscribe) {
+    const unsubExternal = storage.subscribe<AppPersistedState>(
+      STORAGE_KEY,
+      (value) => {
+        if (!value) return;
+        const serialized = JSON.stringify(value);
+        if (serialized === lastSerialized) return;
+        lastSerialized = serialized;
+        applyPersisted(value);
+      },
+    );
+    unsubs.push(unsubExternal);
+  }
 
   return {
     timer,
@@ -75,6 +104,4 @@ export function createPomotimerStores(
   };
 }
 
-// Suppress unused-warning when persistStore stays around for surface-specific
-// callers. Re-exported for convenience.
 export { persistStore };

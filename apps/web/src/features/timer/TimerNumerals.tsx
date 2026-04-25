@@ -1,4 +1,10 @@
-import { activeMinutes, useStores, useTimerState } from "@pomotimer/store";
+import {
+  activeMinutes,
+  useIsRunning,
+  useSecondsLeft,
+  useStores,
+  useTimerState,
+} from "@pomotimer/store";
 import { formatMmSs } from "@pomotimer/core";
 import { useEffect, useRef, useState } from "react";
 
@@ -8,8 +14,8 @@ import { useEffect, useRef, useState } from "react";
  * `:` separator pulses opacity 0.25 ↔ 1 every other second while running.
  */
 export function TimerNumerals() {
-  const secondsLeft = useTimerState((s) => s.secondsLeft);
-  const running = useTimerState((s) => s.running);
+  const secondsLeft = useSecondsLeft();
+  const running = useIsRunning();
   const editing = useTimerState((s) => s.editingTimer);
   const minutes = useTimerState(activeMinutes);
   const { timer } = useStores();

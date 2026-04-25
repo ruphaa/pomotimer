@@ -37,8 +37,13 @@ export interface SessionLog {
 }
 
 export interface AppPersistedState {
+  mode: Mode;
   durations: Durations;
   round: number;
+  /** Wall-clock ms when the active session ends; null when paused/stopped. */
+  endsAt: number | null;
+  /** Seconds remaining at the moment of last pause/reset/mode-switch. */
+  pausedSecondsLeft: number;
   tasks: Task[];
   sessions: SessionLog[];
 }

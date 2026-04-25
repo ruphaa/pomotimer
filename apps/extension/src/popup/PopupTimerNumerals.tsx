@@ -1,11 +1,17 @@
 import { formatMmSs } from "@pomotimer/core";
-import { activeMinutes, useStores, useTimerState } from "@pomotimer/store";
+import {
+  activeMinutes,
+  useIsRunning,
+  useSecondsLeft,
+  useStores,
+  useTimerState,
+} from "@pomotimer/store";
 import { useEffect, useRef, useState } from "react";
 
 /** 56px / 500 / mono. Click to enter edit mode. */
 export function PopupTimerNumerals() {
-  const secondsLeft = useTimerState((s) => s.secondsLeft);
-  const running = useTimerState((s) => s.running);
+  const secondsLeft = useSecondsLeft();
+  const running = useIsRunning();
   const editing = useTimerState((s) => s.editingTimer);
   const minutes = useTimerState(activeMinutes);
   const { timer } = useStores();

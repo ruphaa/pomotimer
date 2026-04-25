@@ -1,12 +1,12 @@
 import { Pause, Play, RotateCcw, SkipForward } from "lucide-react";
 
-import { useStores, useTimerState } from "@pomotimer/store";
+import { useIsRunning, useStores, useTimerState } from "@pomotimer/store";
 
 import { IconButton } from "../../components/IconButton";
 import { Kbd } from "../../components/Kbd";
 
 export function Controls() {
-  const running = useTimerState((s) => s.running);
+  const running = useIsRunning();
   const mode = useTimerState((s) => s.mode);
   const { timer } = useStores();
 

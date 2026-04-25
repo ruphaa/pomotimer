@@ -69,12 +69,36 @@ reopening the popup restores the state — start a 25-minute session,
 let it tick a few seconds, close the popup, reopen, the timer keeps
 ticking from where it left off.
 
-> ⚠️ Currently the timer pauses while the popup is closed (the engine
-> runs in the popup itself, not in a background service worker). To make
-> it tick across closes you'd need an `alarms`-based background script —
-> filed as a follow-up.
+### 6. Verify the timer survives popup closes
 
-### 6. Reset state
+The timer state lives entirely in `chrome.storage.local` and the
+background service worker (`src/background.ts`) owns completion via
+`chrome.alarms`:
+
+1. Set a short duration (click the numerals → enter `1` → Enter).
+2. Click **Start**.
+3. Close the popup (click anywhere outside it).
+4. Wait for the alarm. You should see a desktop notification
+   (“Focus session complete”) and, on the next popup open, the mode has
+   advanced to Short break, the round counter ticked up, and the active
+   task's pomodoro count incremented.
+
+Inspect the alarm directly:
+
+1. `chrome://extensions/` → click **service worker** under the Pomotimer
+   card. This opens devtools attached to the SW.
+2. In its Console:
+   ```js
+   chrome.alarms.getAll(console.log)
+   ```
+   You should see one entry named `pomotimer:completion` with a
+   `scheduledTime` matching `endsAt`.
+
+While the popup IS open, the same alarm still fires; the popup's
+`StoresProvider` is subscribed to `chrome.storage.onChanged`, so the BG's
+post-completion write is mirrored back into the in-memory stores live.
+
+### 7. Reset state
 
 ```js
 chrome.storage.local.clear()

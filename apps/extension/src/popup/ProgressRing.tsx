@@ -1,4 +1,4 @@
-import { activeMinutes, useTimerState } from "@pomotimer/store";
+import { activeMinutes, useSecondsLeft, useTimerState } from "@pomotimer/store";
 import type { ReactNode } from "react";
 
 const RADIUS = 100;
@@ -11,7 +11,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * (numerals + label) absolutely centered.
  */
 export function ProgressRing({ children }: { children: ReactNode }) {
-  const secondsLeft = useTimerState((s) => s.secondsLeft);
+  const secondsLeft = useSecondsLeft();
   const totalSeconds = useTimerState((s) => activeMinutes(s) * 60);
 
   const remaining = totalSeconds > 0 ? secondsLeft / totalSeconds : 0;
