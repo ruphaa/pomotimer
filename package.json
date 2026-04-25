@@ -1,0 +1,21 @@
+{
+  "name": "pomotimer",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Pomotimer — Pomodoro productivity app (web + PWA + Chrome extension).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @pomotimer/web dev",
+    "dev:ext": "pnpm --filter @pomotimer/extension dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r exec rm -rf dist .output .vinxi .tanstack node_modules"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@9.15.5"
+}

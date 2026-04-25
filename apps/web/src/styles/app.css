@@ -1,0 +1,7 @@
+/* App-shell-specific styles will land here as we build out the layout. */
+
+html,
+body,
+#root {
+  height: 100%;
+}

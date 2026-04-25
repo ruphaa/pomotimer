@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+.output
+.vinxi
+.tanstack
+.nitro
+.cache
+.vite
+*.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+coverage
+.turbo
+.pnpm-store
