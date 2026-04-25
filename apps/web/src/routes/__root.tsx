@@ -27,7 +27,11 @@ export const Route = createRootRoute({
       },
       { name: "theme-color", content: "#C8553D" },
     ],
-    links: [{ rel: "manifest", href: "/manifest.webmanifest" }],
+    links: [
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "apple-touch-icon", href: "/icons/icon-192.png" },
+    ],
   }),
   component: RootComponent,
 });
